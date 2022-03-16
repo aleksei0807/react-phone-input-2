@@ -110,7 +110,7 @@ declare module "react-phone-input-2" {
 
   export const formatNumber: (
     text: string,
-    country?: string,
+    country?: CountryData,
     prefix?: string,
     disableCountryCode?: boolean,
     enableAreaCodeStretch?: boolean,
