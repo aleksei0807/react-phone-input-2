@@ -9,6 +9,223 @@ import './utils/prototypes'
 
 import CountryData from './CountryData.js';
 
+export const formatNumber = (
+  text,
+  country,
+  prefix = '+',
+  disableCountryCode = false,
+  enableAreaCodeStretch = false,
+  enableLongNumbers = false,
+  autoFormat = true
+) => {
+  if (!country) return text;
+
+  const { format } = country;
+
+  let pattern;
+  if (disableCountryCode) {
+    pattern = format.split(' ');
+    pattern.shift();
+    pattern = pattern.join(' ');
+  } else {
+    if (enableAreaCodeStretch && country.isAreaCode) {
+      pattern = format.split(' ');
+      pattern[1] = pattern[1].replace(/\.+/, ''.padEnd(country.areaCodeLength, '.'))
+      pattern = pattern.join(' ');
+    } else {
+      pattern = format;
+    }
+  }
+
+  if (!text || text.length === 0) {
+    return disableCountryCode ? '' : prefix;
+  }
+
+  // for all strings with length less than 3, just return it (1, 2 etc.)
+  // also return the same text if the selected country has no fixed format
+  if ((text && text.length < 2) || !pattern || !autoFormat) {
+    return disableCountryCode ? text : prefix + text;
+  }
+
+  const formattedObject = reduce(pattern, (acc, character) => {
+    if (acc.remainingText.length === 0) {
+      return acc;
+    }
+
+    if (character !== '.') {
+      return {
+        formattedText: acc.formattedText + character,
+        remainingText: acc.remainingText
+      };
+    }
+
+    const [head, ...tail] = acc.remainingText;
+
+    return {
+      formattedText: acc.formattedText + head,
+      remainingText: tail
+    };
+  }, {
+    formattedText: '',
+    remainingText: text.split('')
+  });
+
+  let formattedNumber;
+  if (enableLongNumbers) {
+    formattedNumber = formattedObject.formattedText + formattedObject.remainingText.join('');
+  } else {
+    formattedNumber = formattedObject.formattedText;
+  }
+
+  // Always close brackets
+  if (formattedNumber.includes('(') && !formattedNumber.includes(')')) formattedNumber += ')';
+  return formattedNumber;
+}
+
+const guessSelectedCountry = (inputNumber, country, onlyCountries, hiddenAreaCodes, enableAreaCodes) => {
+  // if enableAreaCodes == false, try to search in hidden area codes to detect area code correctly
+  // then search and insert main country which has this area code
+  // https://github.com/bl00mber/react-phone-input-2/issues/201
+  if (enableAreaCodes === false) {
+    let mainCode;
+    hiddenAreaCodes.some(country => {
+      if (startsWith(inputNumber, country.dialCode)) {
+        onlyCountries.some(o => {
+          if (country.iso2 === o.iso2 && o.mainCode) {
+            mainCode = o;
+            return true;
+          }
+        })
+        return true;
+      }
+    })
+    if (mainCode) return mainCode;
+  }
+
+  const secondBestGuess = onlyCountries.find(o => o.iso2 == country);
+  if (inputNumber.trim() === '') return secondBestGuess;
+
+  const bestGuess = onlyCountries.reduce((selectedCountry, country) => {
+    if (startsWith(inputNumber, country.dialCode)) {
+      if (country.dialCode.length > selectedCountry.dialCode.length) {
+        return country;
+      }
+      if (country.dialCode.length === selectedCountry.dialCode.length && country.priority < selectedCountry.priority) {
+        return country;
+      }
+    }
+    return selectedCountry;
+  }, {dialCode: '', priority: 10001});
+
+  if (!bestGuess.name) return secondBestGuess;
+  return bestGuess;
+}
+
+const defaultProps = {
+  country: '',
+  value: '',
+
+  onlyCountries: [],
+  preferredCountries: [],
+  excludeCountries: [],
+
+  placeholder: '1 (702) 123-4567',
+  searchPlaceholder: 'search',
+  searchNotFound: 'No entries to show',
+  flagsImagePath: './flags.png',
+  disabled: false,
+
+  containerStyle: {},
+  inputStyle: {},
+  buttonStyle: {},
+  dropdownStyle: {},
+  searchStyle: {},
+
+  containerClass: '',
+  inputClass: '',
+  buttonClass: '',
+  dropdownClass: '',
+  searchClass: '',
+  className: '',
+
+  autoFormat: true,
+  enableAreaCodes: false,
+  enableTerritories: false,
+  disableCountryCode: false,
+  disableDropdown: false,
+  enableLongNumbers: false,
+  countryCodeEditable: true,
+  enableSearch: false,
+  disableSearchIcon: false,
+  disableInitialCountryGuess: false,
+  disableCountryGuess: false,
+
+  regions: '',
+
+  inputProps: {},
+  localization: {},
+
+  masks: null,
+  priority: null,
+  areaCodes: null,
+
+  preserveOrder: [],
+
+  defaultMask: '... ... ... ... ..', // prefix+dialCode+' '+defaultMask
+  alwaysDefaultMask: false,
+  prefix: '+',
+  copyNumbersOnly: true,
+  renderStringAsFlag: '',
+  autocompleteSearch: false,
+  jumpCursorToEnd: true,
+  enableAreaCodeStretch: false,
+  enableClickOutside: true,
+  showDropdown: false,
+
+  isValid: true, // (value, selectedCountry, onlyCountries, hiddenAreaCodes) => true | false | 'Message'
+  defaultErrorMessage: '',
+  specialLabel: 'Phone',
+
+  onEnterKeyPress: null, // null or function
+
+  keys: {
+    UP: 38, DOWN: 40, RIGHT: 39, LEFT: 37, ENTER: 13,
+    ESC: 27, PLUS: 43, A: 65, Z: 90, SPACE: 32, TAB: 9,
+  }
+}
+
+export const getCountryData = (options) => {
+  const props = {
+    ...defaultProps,
+    ...options
+  }
+
+  return new CountryData(
+    props.enableAreaCodes, props.enableTerritories, props.regions,
+    props.onlyCountries, props.preferredCountries, props.excludeCountries, props.preserveOrder,
+    props.masks, props.priority, props.areaCodes, props.localization,
+    props.prefix, props.defaultMask, props.alwaysDefaultMask,
+  )
+}
+
+export const getCountry = (inputNumber, onlyCountries, hiddenAreaCodes, defaultCountry, disableInitialCountryGuess, enableAreaCodes) => {
+  let countryGuess
+  if (disableInitialCountryGuess) {
+    countryGuess = 0;
+  } else if (inputNumber.length > 1) {
+    // Country detect by phone
+    countryGuess = guessSelectedCountry(inputNumber.substring(0, 6), defaultCountry, onlyCountries, hiddenAreaCodes, enableAreaCodes) || 0;
+  } else if (defaultCountry) {
+    // Default country
+    countryGuess = onlyCountries.find(o => o.iso2 == defaultCountry) || 0;
+  } else {
+    // Empty params
+    countryGuess = 0;
+  }
+
+  return countryGuess
+}
+
 class PhoneInput extends React.Component {
   static propTypes = {
     country: PropTypes.oneOfType([
@@ -102,78 +319,7 @@ class PhoneInput extends React.Component {
     specialLabel: PropTypes.string,
   }
 
-  static defaultProps = {
-    country: '',
-    value: '',
-
-    onlyCountries: [],
-    preferredCountries: [],
-    excludeCountries: [],
-
-    placeholder: '1 (702) 123-4567',
-    searchPlaceholder: 'search',
-    searchNotFound: 'No entries to show',
-    flagsImagePath: './flags.png',
-    disabled: false,
-
-    containerStyle: {},
-    inputStyle: {},
-    buttonStyle: {},
-    dropdownStyle: {},
-    searchStyle: {},
-
-    containerClass: '',
-    inputClass: '',
-    buttonClass: '',
-    dropdownClass: '',
-    searchClass: '',
-    className: '',
-
-    autoFormat: true,
-    enableAreaCodes: false,
-    enableTerritories: false,
-    disableCountryCode: false,
-    disableDropdown: false,
-    enableLongNumbers: false,
-    countryCodeEditable: true,
-    enableSearch: false,
-    disableSearchIcon: false,
-    disableInitialCountryGuess: false,
-    disableCountryGuess: false,
-
-    regions: '',
-
-    inputProps: {},
-    localization: {},
-
-    masks: null,
-    priority: null,
-    areaCodes: null,
-
-    preserveOrder: [],
-
-    defaultMask: '... ... ... ... ..', // prefix+dialCode+' '+defaultMask
-    alwaysDefaultMask: false,
-    prefix: '+',
-    copyNumbersOnly: true,
-    renderStringAsFlag: '',
-    autocompleteSearch: false,
-    jumpCursorToEnd: true,
-    enableAreaCodeStretch: false,
-    enableClickOutside: true,
-    showDropdown: false,
-
-    isValid: true, // (value, selectedCountry, onlyCountries, hiddenAreaCodes) => true | false | 'Message'
-    defaultErrorMessage: '',
-    specialLabel: 'Phone',
-
-    onEnterKeyPress: null, // null or function
-
-    keys: {
-      UP: 38, DOWN: 40, RIGHT: 39, LEFT: 37, ENTER: 13,
-      ESC: 27, PLUS: 43, A: 65, Z: 90, SPACE: 32, TAB: 9,
-    }
-  }
+  static defaultProps = defaultProps
 
   constructor(props) {
     super(props);
@@ -186,19 +332,7 @@ class PhoneInput extends React.Component {
 
     const inputNumber = props.value ? props.value.replace(/\D/g, '') : '';
 
-    let countryGuess;
-    if (props.disableInitialCountryGuess) {
-      countryGuess = 0;
-    } else if (inputNumber.length > 1) {
-      // Country detect by phone
-      countryGuess = this.guessSelectedCountry(inputNumber.substring(0, 6), props.country, onlyCountries, hiddenAreaCodes) || 0;
-    } else if (props.country) {
-      // Default country
-      countryGuess = onlyCountries.find(o => o.iso2 == props.country) || 0;
-    } else {
-      // Empty params
-      countryGuess = 0;
-    }
+    const countryGuess = getCountry(inputNumber, onlyCountries, hiddenAreaCodes, props.country, props.disableInitialCountryGuess, props.enableAreaCodes)
 
     const dialCode = (
       inputNumber.length < 2 &&
@@ -268,42 +402,7 @@ class PhoneInput extends React.Component {
   });
 
   guessSelectedCountry = memoize((inputNumber, country, onlyCountries, hiddenAreaCodes) => {
-    // if enableAreaCodes == false, try to search in hidden area codes to detect area code correctly
-    // then search and insert main country which has this area code
-    // https://github.com/bl00mber/react-phone-input-2/issues/201
-    if (this.props.enableAreaCodes === false) {
-      let mainCode;
-      hiddenAreaCodes.some(country => {
-        if (startsWith(inputNumber, country.dialCode)) {
-          onlyCountries.some(o => {
-            if (country.iso2 === o.iso2 && o.mainCode) {
-              mainCode = o;
-              return true;
-            }
-          })
-          return true;
-        }
-      })
-      if (mainCode) return mainCode;
-    }
-
-    const secondBestGuess = onlyCountries.find(o => o.iso2 == country);
-    if (inputNumber.trim() === '') return secondBestGuess;
-
-    const bestGuess = onlyCountries.reduce((selectedCountry, country) => {
-      if (startsWith(inputNumber, country.dialCode)) {
-        if (country.dialCode.length > selectedCountry.dialCode.length) {
-          return country;
-        }
-        if (country.dialCode.length === selectedCountry.dialCode.length && country.priority < selectedCountry.priority) {
-          return country;
-        }
-      }
-      return selectedCountry;
-    }, {dialCode: '', priority: 10001}, this);
-
-    if (!bestGuess.name) return secondBestGuess;
-    return bestGuess;
+    return guessSelectedCountry(inputNumber, country, onlyCountries, hiddenAreaCodes, this.props.enableAreaCodes)
   });
 
   // Hooks for updated props
@@ -399,69 +498,9 @@ class PhoneInput extends React.Component {
   }
 
   formatNumber = (text, country) => {
-    if (!country) return text;
+    const { prefix, disableCountryCode, enableAreaCodeStretch, enableLongNumbers, autoFormat } = this.props;
 
-    const { format } = country;
-    const { disableCountryCode, enableAreaCodeStretch, enableLongNumbers, autoFormat } = this.props;
-
-    let pattern;
-    if (disableCountryCode) {
-      pattern = format.split(' ');
-      pattern.shift();
-      pattern = pattern.join(' ');
-    } else {
-      if (enableAreaCodeStretch && country.isAreaCode) {
-        pattern = format.split(' ');
-        pattern[1] = pattern[1].replace(/\.+/, ''.padEnd(country.areaCodeLength, '.'))
-        pattern = pattern.join(' ');
-      } else {
-        pattern = format;
-      }
-    }
-
-    if (!text || text.length === 0) {
-      return disableCountryCode ? '' : this.props.prefix;
-    }
-
-    // for all strings with length less than 3, just return it (1, 2 etc.)
-    // also return the same text if the selected country has no fixed format
-    if ((text && text.length < 2) || !pattern || !autoFormat) {
-      return disableCountryCode ? text : this.props.prefix+text;
-    }
-
-    const formattedObject = reduce(pattern, (acc, character) => {
-      if (acc.remainingText.length === 0) {
-        return acc;
-      }
-
-      if (character !== '.') {
-        return {
-          formattedText: acc.formattedText + character,
-          remainingText: acc.remainingText
-        };
-      }
-
-      const [ head, ...tail ] = acc.remainingText;
-
-      return {
-        formattedText: acc.formattedText + head,
-        remainingText: tail
-      };
-    }, {
-      formattedText: '',
-      remainingText: text.split('')
-    });
-
-    let formattedNumber;
-    if (enableLongNumbers) {
-      formattedNumber = formattedObject.formattedText + formattedObject.remainingText.join('');
-    } else {
-      formattedNumber = formattedObject.formattedText;
-    }
-
-    // Always close brackets
-    if (formattedNumber.includes('(') && !formattedNumber.includes(')')) formattedNumber += ')';
-    return formattedNumber;
+    return formatNumber(text, country, prefix, disableCountryCode, enableAreaCodeStretch, enableLongNumbers, autoFormat)
   }
 
   // Put the cursor to the end of the input (usually after a focus event)
