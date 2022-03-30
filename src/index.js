@@ -9,6 +9,27 @@ import './utils/prototypes'
 
 import CountryData from './CountryData.js';
 
+export const getMaskPlaceholder = (country, formattedNumber, symbol = 'X', disableCountryCode = false, prefix = '+') => {
+  if (!country) {
+    return ''
+  }
+
+  const { format } = country;
+
+  let pattern;
+  pattern = format.split(' ');
+  pattern.shift();
+  pattern = pattern.join(' ').replace(/\./g, symbol);
+  if (formattedNumber) {
+    const pureNumber = formattedNumber.replace(prefix, '').replace(disableCountryCode ? '' : country.countryCode, '').trim()
+    if (pureNumber) {
+      pattern = pattern.slice(pureNumber.length)
+    }
+  }
+
+  return pattern
+}
+
 export const formatNumber = (
   text,
   country,
@@ -191,7 +212,9 @@ const defaultProps = {
   keys: {
     UP: 38, DOWN: 40, RIGHT: 39, LEFT: 37, ENTER: 13,
     ESC: 27, PLUS: 43, A: 65, Z: 90, SPACE: 32, TAB: 9,
-  }
+  },
+  maskPlaceholder: false,
+  maskPlaceholderSymbol: 'X',
 }
 
 export const getCountryData = (options) => {
@@ -317,6 +340,8 @@ class PhoneInput extends React.Component {
     ]),
     defaultErrorMessage: PropTypes.string,
     specialLabel: PropTypes.string,
+    maskPlaceholder: PropTypes.bool,
+    maskPlaceholderSymbol: PropTypes.string,
   }
 
   static defaultProps = defaultProps
@@ -949,9 +974,13 @@ class PhoneInput extends React.Component {
     );
   }
 
+  maskClick = () => {
+    this.numberInputRef && this.numberInputRef.focus()
+  }
+
   render() {
     const { onlyCountries, selectedCountry, showDropdown, formattedNumber, hiddenAreaCodes } = this.state;
-    const { disableDropdown, renderStringAsFlag, isValid, defaultErrorMessage, specialLabel } = this.props;
+    const { disableDropdown, renderStringAsFlag, isValid, defaultErrorMessage, specialLabel, maskPlaceholder, maskPlaceholderSymbol } = this.props;
 
     let isValidValue, errorMessage;
     if (typeof isValid === 'boolean') {
@@ -990,6 +1019,13 @@ class PhoneInput extends React.Component {
     });
     const inputFlagClasses = `flag ${selectedCountry && selectedCountry.iso2}`;
 
+    let placeholder = this.props.placeholder
+    const inputFocused = this.numberInputRef && this.numberInputRef === document.activeElement
+    const maskPlaceholderEnabled = !!(maskPlaceholder && selectedCountry)
+    if (maskPlaceholderEnabled) {
+      placeholder = undefined
+    }
+
     return (
       <div
         className={`${containerClasses} ${this.props.className}`}
@@ -1008,7 +1044,7 @@ class PhoneInput extends React.Component {
           onCopy={this.handleInputCopy}
           value={formattedNumber}
           onKeyDown={this.handleInputKeyDown}
-          placeholder={this.props.placeholder}
+          placeholder={placeholder}
           disabled={this.props.disabled}
           type='tel'
           {...this.props.inputProps}
@@ -1021,6 +1057,25 @@ class PhoneInput extends React.Component {
             }
           }}
         />
+        {
+          maskPlaceholderEnabled && (
+            <div className='mask-placeholder' onClick={this.maskClick}>
+              <span>
+                <span className='hidden-mask'>
+                  {
+                    formattedNumber
+                  }
+                </span>
+                <span className='mask'>
+                  &nbsp;
+                  {
+                    getMaskPlaceholder(selectedCountry, formattedNumber, maskPlaceholderSymbol, this.props.disableCountryCode, this.props.prefix)
+                  }
+                </span>
+              </span>
+            </div>
+          )
+        }
 
         <div
           className={flagViewClasses}
