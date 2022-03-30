@@ -106,6 +106,8 @@ declare module "react-phone-input-2" {
     specialLabel?: string;
     disableInitialCountryGuess?: boolean;
     disableCountryGuess?: boolean;
+    maskPlaceholder?: boolean;
+    maskPlaceholderSymbol?: string;
   }
 
   export const formatNumber: (
@@ -132,6 +134,14 @@ declare module "react-phone-input-2" {
     disableInitialCountryGuess?: boolean,
     enableAreaCodes?: boolean
   ) => CountryData
+
+  export const getMaskPlaceholder: (
+    country: CountryData,
+    formattedNumber?: string,
+    symbol?: string,
+    disableCountryCode?: boolean,
+    prefix?: string
+  ) => string | undefined
 
   const PhoneInput: React.FC<PhoneInputProps>;
   export default PhoneInput;
