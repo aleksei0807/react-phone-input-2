@@ -20,6 +20,11 @@ export const getMaskPlaceholder = (country, formattedNumber, symbol = 'X', disab
   pattern = format.split(' ');
   pattern.shift();
   pattern = pattern.join(' ').replace(/\./g, symbol);
+  const splittedPattern = pattern.split(symbol)
+  const limit = disableCountryCode ? 15 : 15 - country.dialCode.length
+  if (splittedPattern.length > limit) {
+    pattern = splittedPattern.slice(0, limit + 1).join(symbol).trim()
+  }
   if (formattedNumber) {
     const pureNumber = formattedNumber.replace(prefix, '').replace(disableCountryCode ? '' : country.dialCode, '').trim()
     if (pureNumber) {
@@ -598,12 +603,7 @@ class PhoneInput extends React.Component {
     }
 
     // Does exceed default 15 digit phone number limit
-    let limit = 15
-    if (newSelectedCountry && newSelectedCountry.format) {
-      limit = newSelectedCountry.format.split('.').length - 1
-    }
-
-    if (value.replace(/\D/g, '').length > limit) {
+    if (value.replace(/\D/g, '').length > 15) {
       if (this.props.enableLongNumbers === false) return;
       if (typeof this.props.enableLongNumbers === 'number') {
         if (value.replace(/\D/g, '').length > this.props.enableLongNumbers) return;
